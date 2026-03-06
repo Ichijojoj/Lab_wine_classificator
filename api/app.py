@@ -77,10 +77,11 @@ class PredictionResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    """Модель ответа health check"""
     status: str
     model_loaded: bool
 
+    class Config:
+        protected_namespaces = ()
 
 class FeaturesResponse(BaseModel):
     """Модель ответа со списком признаков"""

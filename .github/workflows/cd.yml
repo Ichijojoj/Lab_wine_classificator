@@ -1,0 +1,83 @@
+name: CD Pipeline
+
+on:
+  workflow_dispatch:  # Ручной запуск
+  schedule:
+    - cron: '0 0 * * 0'
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    branches: [main]
+    types:
+      - completed
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/wine-quality-model
+
+jobs:
+  # Деплой и функциональное тестирование
+  deploy-and-test:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Pull Docker image
+        run: docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Run container
+        run: |
+          docker run -d \
+            --name wine-api-test \
+            -p 5000:5000 \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          echo "⏳ Waiting for service to start..."
+          sleep 20
+
+      - name: Health check
+        run: |
+          for i in {1..10}; do
+            if curl -f http://localhost:5000/health; then
+              echo "Service is healthy"
+              exit 0
+            fi
+            echo "Retry $i/10..."
+            sleep 5
+          done
+          echo "Health check failed"
+          exit 1
+
+      - name: Run scenario tests
+        run: |
+          pip install requests
+          python scripts/run_scenario_tests.py scenario.json
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: test_results/
+          retention-days: 7
+
+      - name: Stop and cleanup container
+        if: always()
+        run: |
+          docker stop wine-api-test || true
+          docker rm wine-api-test || true
+
+      - name: Update dev_sec_ops.yml with commit hashes
+        if: success()
+        run: |
+          echo "📝 Updating dev_sec_ops.yml with latest commits..."
+          git log -5 --format='- hash: "%H"%n  message: "%s"%n  author: "%an"%n  date: "%ad"' --date=format:"%Y-%m-%d" > commits_tmp.txt
+          # Здесь можно добавить логику обновления файла
+          cat commits_tmp.txt
