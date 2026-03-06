@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
 import os
 import sys
@@ -38,20 +38,10 @@ app.add_middleware(
 
 class WineFeatures(BaseModel):
     """Модель входных данных для предсказания"""
-    fixed_acidity: float = Field(..., description="Fixed acidity", example=7.0)
-    volatile_acidity: float = Field(..., description="Volatile acidity", example=0.27)
-    citric_acid: float = Field(..., description="Citric acid", example=0.36)
-    residual_sugar: float = Field(..., description="Residual sugar", example=20.7)
-    chlorides: float = Field(..., description="Chlorides", example=0.045)
-    free_sulfur_dioxide: float = Field(..., description="Free sulfur dioxide", example=45)
-    total_sulfur_dioxide: float = Field(..., description="Total sulfur dioxide", example=170)
-    density: float = Field(..., description="Density", example=1.001)
-    ph: float = Field(..., description="pH", example=3.0)
-    sulphates: float = Field(..., description="Sulphates", example=0.45)
-    alcohol: float = Field(..., description="Alcohol", example=8.8)
 
-    class Config:
-        json_schema_extra = {
+    # 🔹 Используем model_config вместо class Config
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "fixed_acidity": 7.0,
                 "volatile_acidity": 0.27,
@@ -65,7 +55,22 @@ class WineFeatures(BaseModel):
                 "sulphates": 0.45,
                 "alcohol": 8.8
             }
-        }
+        },
+        protected_namespaces=()
+    )
+
+
+    fixed_acidity: float = Field(..., description="Fixed acidity")
+    volatile_acidity: float = Field(..., description="Volatile acidity")
+    citric_acid: float = Field(..., description="Citric acid")
+    residual_sugar: float = Field(..., description="Residual sugar")
+    chlorides: float = Field(..., description="Chlorides")
+    free_sulfur_dioxide: float = Field(..., description="Free sulfur dioxide")
+    total_sulfur_dioxide: float = Field(..., description="Total sulfur dioxide")
+    density: float = Field(..., description="Density")
+    ph: float = Field(..., description="pH")
+    sulphates: float = Field(..., description="Sulphates")
+    alcohol: float = Field(..., description="Alcohol")
 
 
 class PredictionResponse(BaseModel):
