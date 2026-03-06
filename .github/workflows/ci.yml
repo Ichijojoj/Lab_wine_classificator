@@ -11,7 +11,7 @@ env:
   IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/wine-quality-model
 
 jobs:
-  # Тестирование кода
+  # 🔹 Тестирование кода
   test:
     runs-on: ubuntu-latest
     steps:
@@ -32,13 +32,13 @@ jobs:
         run: |
           pytest tests/ --cov=src --cov=api --cov-report=xml --cov-report=term
 
-      - name: Upload coverage to Codecov (optional)
+      - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
-        if: ${{ secrets.CODECOV_TOKEN }}
         with:
           files: ./coverage.xml
+          fail_ci_if_error: false  # ✅ Не ломать CI если нет токена
 
-  # Сборка Docker образа
+  # 🔹 Сборка Docker образа
   build:
     needs: test
     runs-on: ubuntu-latest
