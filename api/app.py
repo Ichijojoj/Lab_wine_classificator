@@ -1,34 +1,313 @@
-from flask import Flask, request, jsonify
-from src.model import WineQualityModel
+from fastapi import FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+from typing import List, Optional
 import os
+import sys
 
-app = Flask(__name__)
-model = WineQualityModel(model_path=os.getenv('MODEL_PATH', 'models/wine_model.pkl'))
+# Добавляем путь к src
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-@app.route('/health', methods=['GET'])
-def health():
-    return jsonify({'status': 'ok'}), 200
+from src.model import WineQualityModel
 
-@app.route('/predict', methods=['POST'])
-def predict():
+# =============================================================================
+# ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
+# =============================================================================
+
+app = FastAPI(
+    title="🍷 Wine Quality Prediction API",
+    description="API для предсказания качества вина на основе химических характеристик",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
+
+# CORS middleware (для фронтенда)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # В продакшене укажите конкретные домены
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# =============================================================================
+# PYDANTIC МОДЕЛИ ДЛЯ ВАЛИДАЦИИ
+# =============================================================================
+
+class WineFeatures(BaseModel):
+    """Модель входных данных для предсказания"""
+    fixed_acidity: float = Field(..., description="Fixed acidity", example=7.0)
+    volatile_acidity: float = Field(..., description="Volatile acidity", example=0.27)
+    citric_acid: float = Field(..., description="Citric acid", example=0.36)
+    residual_sugar: float = Field(..., description="Residual sugar", example=20.7)
+    chlorides: float = Field(..., description="Chlorides", example=0.045)
+    free_sulfur_dioxide: float = Field(..., description="Free sulfur dioxide", example=45)
+    total_sulfur_dioxide: float = Field(..., description="Total sulfur dioxide", example=170)
+    density: float = Field(..., description="Density", example=1.001)
+    ph: float = Field(..., description="pH", example=3.0)
+    sulphates: float = Field(..., description="Sulphates", example=0.45)
+    alcohol: float = Field(..., description="Alcohol", example=8.8)
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "fixed_acidity": 7.0,
+                "volatile_acidity": 0.27,
+                "citric_acid": 0.36,
+                "residual_sugar": 20.7,
+                "chlorides": 0.045,
+                "free_sulfur_dioxide": 45,
+                "total_sulfur_dioxide": 170,
+                "density": 1.001,
+                "ph": 3.0,
+                "sulphates": 0.45,
+                "alcohol": 8.8
+            }
+        }
+
+
+class PredictionResponse(BaseModel):
+    """Модель ответа предсказания"""
+    quality: str = Field(..., description="Качество вина (good/bad)")
+    quality_class: int = Field(..., description="Класс качества (0/1)")
+    probability: float = Field(..., description="Вероятность предсказания")
+    probabilities: dict = Field(..., description="Вероятности по классам")
+
+
+class HealthResponse(BaseModel):
+    """Модель ответа health check"""
+    status: str
+    model_loaded: bool
+
+
+class FeaturesResponse(BaseModel):
+    """Модель ответа со списком признаков"""
+    features: List[str]
+
+
+class BatchPredictionRequest(BaseModel):
+    """Модель для пакетного предсказания"""
+    samples: List[WineFeatures]
+
+
+class BatchPredictionResponse(BaseModel):
+    """Модель ответа для пакетного предсказания"""
+    predictions: List[PredictionResponse]
+
+
+# =============================================================================
+# ЗАГРУЗКА МОДЕЛИ
+# =============================================================================
+
+model: Optional[WineQualityModel] = None
+
+
+@app.on_event("startup")
+async def load_model():
+    """Загрузка модели при старте приложения"""
+    global model
     try:
-        data = request.get_json()
+        model_path = os.getenv('MODEL_PATH', 'models/wine_model.pkl')
+        scaler_path = os.getenv('SCALER_PATH', 'models/scaler.pkl')
 
-        required_features = [
-            'fixed acidity', 'volatile acidity', 'citric acid',
-            'residual sugar', 'chlorides', 'free sulfur dioxide',
-            'total sulfur dioxide', 'density', 'pH', 'sulphates', 'alcohol'
-        ]
+        model = WineQualityModel(model_path=model_path, scaler_path=scaler_path)
+        print(f"✅ Model loaded successfully from {model_path}")
+    except Exception as e:
+        print(f"⚠️ Warning: Model not loaded: {e}")
+        model = None
 
-        for feature in required_features:
-            if feature not in data:
-                return jsonify({'error': f'Missing feature: {feature}'}), 400
 
-        result = model.predict(data)
-        return jsonify(result), 200
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Очистка при остановке приложения"""
+    global model
+    model = None
+    print("👋 Model unloaded")
+
+
+# =============================================================================
+# ENDPOINTS
+# =============================================================================
+
+@app.get("/", tags=["Main"])
+async def root():
+    """Главная страница API"""
+    return {
+        "message": "🍷 Wine Quality Prediction API",
+        "docs": "/docs",
+        "health": "/health"
+    }
+
+
+@app.get("/health", response_model=HealthResponse, tags=["Health"])
+async def health_check():
+    """
+    Проверка здоровья сервиса
+
+    Возвращает статус сервиса и загружена ли модель
+    """
+    return HealthResponse(
+        status="ok",
+        model_loaded=model is not None
+    )
+
+
+@app.post("/predict", response_model=PredictionResponse, tags=["Prediction"])
+async def predict(features: WineFeatures):
+    """
+    Предсказание качества вина
+
+    **Принимает:**
+    - Все 11 химических характеристик вина
+
+    **Возвращает:**
+    - quality: good/bad
+    - quality_class: 0/1
+    - probability: вероятность предсказания
+    - probabilities: вероятности по классам
+    """
+    if model is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Model not loaded"
+        )
+
+    try:
+        # Конвертация Pydantic модели в dict с правильными ключами
+        features_dict = {
+            'fixed acidity': features.fixed_acidity,
+            'volatile acidity': features.volatile_acidity,
+            'citric acid': features.citric_acid,
+            'residual sugar': features.residual_sugar,
+            'chlorides': features.chlorides,
+            'free sulfur dioxide': features.free_sulfur_dioxide,
+            'total sulfur dioxide': features.total_sulfur_dioxide,
+            'density': features.density,
+            'pH': features.ph,
+            'sulphates': features.sulphates,
+            'alcohol': features.alcohol
+        }
+
+        result = model.predict(features_dict)
+
+        return PredictionResponse(**result)
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal error: {str(e)}"
+        )
+
+
+@app.post("/predict_batch", response_model=BatchPredictionResponse, tags=["Prediction"])
+async def predict_batch(request: BatchPredictionRequest):
+    """
+    Пакетное предсказание качества вина
+
+    **Принимает:**
+    - samples: список образцов вина
+
+    **Возвращает:**
+    - predictions: список предсказаний
+    """
+    if model is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Model not loaded"
+        )
+
+    try:
+        results = []
+        for sample in request.samples:
+            features_dict = {
+                'fixed acidity': sample.fixed_acidity,
+                'volatile acidity': sample.volatile_acidity,
+                'citric acid': sample.citric_acid,
+                'residual sugar': sample.residual_sugar,
+                'chlorides': sample.chlorides,
+                'free sulfur dioxide': sample.free_sulfur_dioxide,
+                'total sulfur dioxide': sample.total_sulfur_dioxide,
+                'density': sample.density,
+                'pH': sample.ph,
+                'sulphates': sample.sulphates,
+                'alcohol': sample.alcohol
+            }
+            results.append(model.predict(features_dict))
+
+        return BatchPredictionResponse(predictions=results)
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@app.get("/features", response_model=FeaturesResponse, tags=["Info"])
+async def get_features():
+    """
+    Получить список требуемых признаков
+
+    Возвращает названия всех признаков, необходимых для предсказания
+    """
+    if model is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Model not loaded"
+        )
+
+    return FeaturesResponse(features=model.feature_names)
+
+
+@app.get("/metrics", tags=["Info"])
+async def get_metrics():
+    """
+    Получить метрики модели
+
+    Возвращает accuracy, roc_auc и другую информацию о модели
+    """
+    if model is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Model not loaded"
+        )
+
+    try:
+        import joblib
+        metrics_path = os.getenv('METRICS_PATH', 'models/metrics.pkl')
+        metrics = joblib.load(metrics_path)
+
+        return {
+            "accuracy": metrics.get('accuracy', 0),
+            "roc_auc": metrics.get('roc_auc', 0),
+            "train_size": metrics.get('train_size', 0),
+            "test_size": metrics.get('test_size', 0),
+            "feature_importance": metrics.get('feature_importance', {})
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not load metrics: {str(e)}"
+        )
+
+
+# =============================================================================
+# ЗАПУСК ПРИЛОЖЕНИЯ
+# =============================================================================
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    import uvicorn
+
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=5000,
+        reload=True
+    )
