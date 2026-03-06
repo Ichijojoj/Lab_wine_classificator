@@ -1,0 +1,50 @@
+{
+  "test_scenarios": [
+    {
+      "name": "test_good_wine",
+      "endpoint": "/predict",
+      "method": "POST",
+      "input": {
+        "fixed acidity": 8.0,
+        "volatile acidity": 0.2,
+        "citric acid": 0.4,
+        "residual sugar": 5.0,
+        "chlorides": 0.05,
+        "free sulfur dioxide": 30,
+        "total sulfur dioxide": 100,
+        "density": 0.995,
+        "pH": 3.3,
+        "sulphates": 0.5,
+        "alcohol": 11.0
+      },
+      "expected_status": 200,
+      "expected_quality": "good"
+    },
+    {
+      "name": "test_bad_wine",
+      "endpoint": "/predict",
+      "method": "POST",
+      "input": {
+        "fixed acidity": 6.0,
+        "volatile acidity": 0.5,
+        "citric acid": 0.1,
+        "residual sugar": 10.0,
+        "chlorides": 0.08,
+        "free sulfur dioxide": 50,
+        "total sulfur dioxide": 200,
+        "density": 1.002,
+        "pH": 3.0,
+        "sulphates": 0.3,
+        "alcohol": 8.0
+      },
+      "expected_status": 200,
+      "expected_quality": "bad"
+    },
+    {
+      "name": "test_health",
+      "endpoint": "/health",
+      "method": "GET",
+      "expected_status": 200
+    }
+  ]
+}
