@@ -79,5 +79,4 @@ jobs:
         run: |
           echo "📝 Updating dev_sec_ops.yml with latest commits..."
           git log -5 --format='- hash: "%H"%n  message: "%s"%n  author: "%an"%n  date: "%ad"' --date=format:"%Y-%m-%d" > commits_tmp.txt
-          # Здесь можно добавить логику обновления файла
           cat commits_tmp.txt
