@@ -5,8 +5,8 @@ import joblib
 import configparser
 import os
 import sys
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(project_root)
 from data_preprocessing import load_data, preprocess_data, split_and_scale
 
 def train_model(config_path='configs/config.ini'):
