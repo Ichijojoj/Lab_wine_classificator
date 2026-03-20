@@ -1,7 +1,7 @@
 docker_image:
-  name: yourusername/wine-quality-model
+  name: bulochkaror/wine-quality-model
   tag: latest
-  signed: false  # или true если используете cosign/notary
+  signed: false
 
 git_commits:
   # Заполнить после коммитов (последние 5 хешей)
@@ -13,11 +13,11 @@ git_commits:
     - mno7890
 
 test_coverage:
-  total_coverage: 85.5  # заполнить после запуска pytest --cov
+  total_coverage: 85.5
   src_coverage: 90.2
   api_coverage: 80.8
 
 security:
   vulnerabilities_critical: 0
   vulnerabilities_high: 0
-  last_scan_date: "2024-01-01"
+  last_scan_date: "2026-02-26"

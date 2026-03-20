@@ -5,14 +5,9 @@ from typing import List, Optional
 import os
 import sys
 
-# Добавляем путь к src
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.model import WineQualityModel
-
-# =============================================================================
-# ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
-# =============================================================================
 
 app = FastAPI(
     title="🍷 Wine Quality Prediction API",
@@ -22,24 +17,17 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# CORS middleware (для фронтенда)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # В продакшене укажите конкретные домены
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-# =============================================================================
-# PYDANTIC МОДЕЛИ ДЛЯ ВАЛИДАЦИИ
-# =============================================================================
-
 class WineFeatures(BaseModel):
-    """Модель входных данных для предсказания"""
 
-    # 🔹 Используем model_config вместо class Config
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -103,16 +91,12 @@ class BatchPredictionResponse(BaseModel):
     predictions: List[PredictionResponse]
 
 
-# =============================================================================
-# ЗАГРУЗКА МОДЕЛИ
-# =============================================================================
-
 model: Optional[WineQualityModel] = None
 
 
 @app.on_event("startup")
 async def load_model():
-    """Загрузка модели при старте приложения"""
+
     global model
     try:
         model_path = os.getenv('MODEL_PATH', 'models/wine_model.pkl')
@@ -132,10 +116,6 @@ async def shutdown_event():
     model = None
     print("👋 Model unloaded")
 
-
-# =============================================================================
-# ENDPOINTS
-# =============================================================================
 
 @app.get("/", tags=["Main"])
 async def root():
@@ -162,18 +142,7 @@ async def health_check():
 
 @app.post("/predict", response_model=PredictionResponse, tags=["Prediction"])
 async def predict(features: WineFeatures):
-    """
-    Предсказание качества вина
 
-    **Принимает:**
-    - Все 11 химических характеристик вина
-
-    **Возвращает:**
-    - quality: good/bad
-    - quality_class: 0/1
-    - probability: вероятность предсказания
-    - probabilities: вероятности по классам
-    """
     if model is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -181,7 +150,6 @@ async def predict(features: WineFeatures):
         )
 
     try:
-        # Конвертация Pydantic модели в dict с правильными ключами
         features_dict = {
             'fixed acidity': features.fixed_acidity,
             'volatile acidity': features.volatile_acidity,
@@ -214,15 +182,7 @@ async def predict(features: WineFeatures):
 
 @app.post("/predict_batch", response_model=BatchPredictionResponse, tags=["Prediction"])
 async def predict_batch(request: BatchPredictionRequest):
-    """
-    Пакетное предсказание качества вина
 
-    **Принимает:**
-    - samples: список образцов вина
-
-    **Возвращает:**
-    - predictions: список предсказаний
-    """
     if model is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -258,11 +218,7 @@ async def predict_batch(request: BatchPredictionRequest):
 
 @app.get("/features", response_model=FeaturesResponse, tags=["Info"])
 async def get_features():
-    """
-    Получить список требуемых признаков
 
-    Возвращает названия всех признаков, необходимых для предсказания
-    """
     if model is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -274,11 +230,7 @@ async def get_features():
 
 @app.get("/metrics", tags=["Info"])
 async def get_metrics():
-    """
-    Получить метрики модели
 
-    Возвращает accuracy, roc_auc и другую информацию о модели
-    """
     if model is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -303,10 +255,6 @@ async def get_metrics():
             detail=f"Could not load metrics: {str(e)}"
         )
 
-
-# =============================================================================
-# ЗАПУСК ПРИЛОЖЕНИЯ
-# =============================================================================
 
 if __name__ == '__main__':
     import uvicorn
