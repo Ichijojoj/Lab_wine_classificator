@@ -1,3 +1,6 @@
+from contextlib import asynccontextmanager
+import logging
+
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ConfigDict
@@ -9,6 +12,41 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.model import WineQualityModel
 
+# Настройка логгера
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global model
+    try:
+        model_path = os.getenv('MODEL_PATH', 'models/wine_model.pkl')
+        scaler_path = os.getenv('SCALER_PATH', 'models/scaler.pkl')
+
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Model file missing: {model_path}")
+
+        model = WineQualityModel(model_path=model_path, scaler_path=scaler_path)
+        logger.info(f"✅ Model loaded successfully from {model_path}")
+    except (FileNotFoundError, AttributeError, ImportError) as e:
+        logger.error(f"❌ Critical error loading model: {e}")
+        model = None
+    except Exception as e:
+        logger.error(f"❓ Unexpected error: {type(e).__name__}: {e}")
+        model = None
+
+    yield
+
+    model = None
+    logger.info("👋 Model unloaded")
+
+
+app = FastAPI(
+    title="🍷 Wine Quality Prediction API",
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
 app = FastAPI(
     title="🍷 Wine Quality Prediction API",
     description="API для предсказания качества вина на основе химических характеристик",
@@ -94,29 +132,6 @@ class BatchPredictionResponse(BaseModel):
 model: Optional[WineQualityModel] = None
 
 
-@app.on_event("startup")
-async def load_model():
-
-    global model
-    try:
-        model_path = os.getenv('MODEL_PATH', 'models/wine_model.pkl')
-        scaler_path = os.getenv('SCALER_PATH', 'models/scaler.pkl')
-
-        model = WineQualityModel(model_path=model_path, scaler_path=scaler_path)
-        print(f"✅ Model loaded successfully from {model_path}")
-    except Exception as e:
-        print(f"⚠️ Warning: Model not loaded: {e}")
-        model = None
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Очистка при остановке приложения"""
-    global model
-    model = None
-    print("👋 Model unloaded")
-
-
 @app.get("/", tags=["Main"])
 async def root():
     """Главная страница API"""
@@ -142,43 +157,21 @@ async def health_check():
 
 @app.post("/predict", response_model=PredictionResponse, tags=["Prediction"])
 async def predict(features: WineFeatures):
-
     if model is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Model not loaded"
+            detail="Model not initialized"
         )
-
     try:
-        features_dict = {
-            'fixed acidity': features.fixed_acidity,
-            'volatile acidity': features.volatile_acidity,
-            'citric acid': features.citric_acid,
-            'residual sugar': features.residual_sugar,
-            'chlorides': features.chlorides,
-            'free sulfur dioxide': features.free_sulfur_dioxide,
-            'total sulfur dioxide': features.total_sulfur_dioxide,
-            'density': features.density,
-            'pH': features.ph,
-            'sulphates': features.sulphates,
-            'alcohol': features.alcohol
-        }
-
+        features_dict = {f.replace('_', ' '): v for f, v in features.model_dump().items()}
         result = model.predict(features_dict)
-
         return PredictionResponse(**result)
-
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Internal error: {str(e)}"
-        )
-
+        logger.warning(f"Invalid input: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except KeyError as e:
+        logger.error(f"Mapping error: {e}")
+        raise HTTPException(status_code=422, detail=f"Missing feature in mapping: {e}")
 
 @app.post("/predict_batch", response_model=BatchPredictionResponse, tags=["Prediction"])
 async def predict_batch(request: BatchPredictionRequest):

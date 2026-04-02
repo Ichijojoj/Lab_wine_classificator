@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  wine-api:
+    build: .
+    container_name: wine-quality-api
+    ports:
+      - "5000:5000"
+    environment:
+      - MODEL_PATH=/app/models/wine_model.pkl
+      - SCALER_PATH=/app/models/scaler.pkl

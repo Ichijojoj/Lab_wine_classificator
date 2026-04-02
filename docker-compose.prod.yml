@@ -1,0 +1,12 @@
+version: '3.8'
+services:
+  wine-api:
+    restart: always
+    environment:
+      - ENV=production
+    # В продакшене используем Gunicorn для стабильности
+    command: gunicorn -w 4 -k uvicorn.workers.UvicornWorker api.app:app --bind 0.0.0.0:5000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      retries: 3

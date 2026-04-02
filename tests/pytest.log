@@ -1,0 +1,14 @@
+DEBUG    asyncio:selector_events.py:54 Using selector: EpollSelector
+INFO     httpx:_client.py:1027 HTTP Request: GET http://testserver/health "HTTP/1.1 200 OK"
+DEBUG    asyncio:selector_events.py:54 Using selector: EpollSelector
+INFO     httpx:_client.py:1027 HTTP Request: GET http://testserver/health "HTTP/1.1 200 OK"
+DEBUG    asyncio:selector_events.py:54 Using selector: EpollSelector
+INFO     httpx:_client.py:1027 HTTP Request: POST http://testserver/predict "HTTP/1.1 422 Unprocessable Entity"
+DEBUG    asyncio:selector_events.py:54 Using selector: EpollSelector
+INFO     httpx:_client.py:1027 HTTP Request: POST http://testserver/predict "HTTP/1.1 503 Service Unavailable"
+DEBUG    asyncio:selector_events.py:54 Using selector: EpollSelector
+INFO     httpx:_client.py:1027 HTTP Request: POST http://testserver/predict "HTTP/1.1 422 Unprocessable Entity"
+DEBUG    asyncio:selector_events.py:54 Using selector: EpollSelector
+INFO     httpx:_client.py:1027 HTTP Request: GET http://testserver/features "HTTP/1.1 503 Service Unavailable"
+DEBUG    asyncio:selector_events.py:54 Using selector: EpollSelector
+INFO     httpx:_client.py:1027 HTTP Request: GET http://testserver/ "HTTP/1.1 200 OK"
