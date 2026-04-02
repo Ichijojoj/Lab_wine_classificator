@@ -47,13 +47,6 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
-app = FastAPI(
-    title="🍷 Wine Quality Prediction API",
-    description="API для предсказания качества вина на основе химических характеристик",
-    version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc"
-)
 
 app.add_middleware(
     CORSMiddleware,
